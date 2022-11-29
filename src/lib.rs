@@ -549,8 +549,9 @@ impl<T> Arena<T> {
     ///
     /// ```
     /// # use arena::{Arena, ArenaId};
+    /// #[derive(Debug)]
     /// struct Person {
-    ///     id: ArenaId,
+    ///     id: ArenaId<Person>,
     ///     name: &'static str,
     /// }
     ///
