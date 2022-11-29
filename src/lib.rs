@@ -293,7 +293,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena.get(c), Some(&'C'));
     /// ```
     #[inline]
-    pub fn get(&self, id: ArenaId) -> Option<&T> {
+    pub fn get(&self, id: ArenaId<T>) -> Option<&T> {
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(&self.values[*value]),
             _ => None,
@@ -324,7 +324,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena.as_slice(), &['B', 'A']);
     /// ```
     #[inline]
-    pub fn get_mut(&mut self, id: ArenaId) -> Option<&mut T> {
+    pub fn get_mut(&mut self, id: ArenaId<T>) -> Option<&mut T> {
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(&mut self.values[*value]),
             _ => None,
@@ -355,7 +355,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena.as_slice(), &['X', 'Y']);
     ///
     /// ```
-    pub fn get2_mut(&mut self, a: ArenaId, b: ArenaId) -> (Option<&mut T>, Option<&mut T>) {
+    pub fn get2_mut(&mut self, a: ArenaId<T>, b: ArenaId<T>) -> (Option<&mut T>, Option<&mut T>) {
         match (self.index_of(a), self.index_of(b)) {
             (Some(a), Some(b)) => {
                 assert_ne!(a, b);
@@ -395,7 +395,7 @@ impl<T> Arena<T> {
     /// assert!(arena.contains(c));
     /// ```
     #[inline]
-    pub fn contains(&self, id: ArenaId) -> bool {
+    pub fn contains(&self, id: ArenaId<T>) -> bool {
         self.get(id).is_some()
     }
 
@@ -427,13 +427,17 @@ impl<T> Arena<T> {
     ///
     /// ```
     #[inline]
-    pub fn id_at(&self, index: usize) -> Option<ArenaId> {
+    pub fn id_at(&self, index: usize) -> Option<ArenaId<T>> {
         if index >= self.len() {
             return None;
         }
         let idx = self.slots.get(index)?.value_slot;
         match &self.slots[idx].state {
-            State::Used { uid, value } if *value == index => Some(ArenaId { uid: *uid, idx }),
+            State::Used { uid, value } if *value == index => Some(ArenaId::<T> {
+                uid: *uid,
+                idx,
+                _ty: PhantomData,
+            }),
             _ => None,
         }
     }
@@ -465,7 +469,7 @@ impl<T> Arena<T> {
     ///
     /// ```
     #[inline]
-    pub fn index_of(&self, id: ArenaId) -> Option<usize> {
+    pub fn index_of(&self, id: ArenaId<T>) -> Option<usize> {
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(*value),
             _ => None,
@@ -488,7 +492,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena.get(b), Some(&'B'));
     /// ```
     #[inline]
-    pub fn insert(&mut self, value: T) -> ArenaId {
+    pub fn insert(&mut self, value: T) -> ArenaId<T> {
         self.insert_with(|_| value)
     }
 
@@ -523,9 +527,9 @@ impl<T> Arena<T> {
     /// assert_eq!(arena[bar].id, bar);
     /// assert_eq!(arena[bar].name, "Bar");
     /// ```
-    pub fn insert_with<F>(&mut self, create: F) -> ArenaId
+    pub fn insert_with<F>(&mut self, create: F) -> ArenaId<T>
     where
-        F: FnOnce(ArenaId) -> T,
+        F: FnOnce(ArenaId<T>) -> T,
     {
         let value = self.values.len();
         let idx = match self.first_free.take() {
@@ -555,9 +559,10 @@ impl<T> Arena<T> {
             }
         };
         self.slots[value].value_slot = idx;
-        let id = ArenaId {
+        let id = ArenaId::<T> {
             uid: self.next_uid,
             idx,
+            _ty: PhantomData,
         };
         self.next_uid += 1;
         self.values.push(create(id));
@@ -578,7 +583,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena.remove(foo), None);
     ///
     /// ```
-    pub fn remove(&mut self, id: ArenaId) -> Option<T> {
+    pub fn remove(&mut self, id: ArenaId<T>) -> Option<T> {
         // get the position of the removed value
         let removed_val = match &self.slots[id.idx].state {
             State::Used { uid, value } if *uid == id.uid => *value,
@@ -729,7 +734,7 @@ impl<T> Arena<T> {
     /// assert_eq!(arena[b], 'B');
     /// ```
     #[inline]
-    pub fn swap_positions(&mut self, i: ArenaId, j: ArenaId) -> bool {
+    pub fn swap_positions(&mut self, i: ArenaId<T>, j: ArenaId<T>) -> bool {
         if let Some(i) = self.index_of(i) {
             if let Some(j) = self.index_of(j) {
                 self.swap(i, j);
@@ -966,9 +971,10 @@ impl<T> Arena<T> {
     /// assert_eq!(ids.next(), None);
     /// ```
     #[inline]
-    pub fn ids(&self) -> Ids<'_> {
+    pub fn ids(&self) -> Ids<'_, T> {
         Ids {
             iter: self.slots[..self.len()].iter().enumerate(),
+            _ty: PhantomData,
         }
     }
 }
@@ -1027,18 +1033,18 @@ impl<T> Deref for Arena<T> {
     }
 }
 
-impl<T> Index<ArenaId> for Arena<T> {
+impl<T> Index<ArenaId<T>> for Arena<T> {
     type Output = T;
 
     #[inline]
-    fn index(&self, index: ArenaId) -> &Self::Output {
+    fn index(&self, index: ArenaId<T>) -> &Self::Output {
         self.get(index).unwrap()
     }
 }
 
-impl<T> IndexMut<ArenaId> for Arena<T> {
+impl<T> IndexMut<ArenaId<T>> for Arena<T> {
     #[inline]
-    fn index_mut(&mut self, index: ArenaId) -> &mut Self::Output {
+    fn index_mut(&mut self, index: ArenaId<T>) -> &mut Self::Output {
         self.get_mut(index).unwrap()
     }
 }
@@ -1200,14 +1206,21 @@ pub struct Pairs<'a, T> {
 }
 
 impl<'a, T> Iterator for Pairs<'a, T> {
-    type Item = (ArenaId, &'a T);
+    type Item = (ArenaId<T>, &'a T);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (idx, val) = self.iter.next()?;
         let idx = self.slots[idx].value_slot;
         match &self.slots[idx].state {
-            State::Used { uid, .. } => Some((ArenaId { uid: *uid, idx }, val)),
+            State::Used { uid, .. } => Some((
+                ArenaId::<T> {
+                    uid: *uid,
+                    idx,
+                    _ty: PhantomData,
+                },
+                val,
+            )),
             _ => unreachable!(),
         }
     }
@@ -1222,14 +1235,21 @@ pub struct PairsMut<'a, T> {
 }
 
 impl<'a, T> Iterator for PairsMut<'a, T> {
-    type Item = (ArenaId, &'a mut T);
+    type Item = (ArenaId<T>, &'a mut T);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (idx, val) = self.iter.next()?;
         let idx = self.slots[idx].value_slot;
         match &self.slots[idx].state {
-            State::Used { uid, .. } => Some((ArenaId { uid: *uid, idx }, val)),
+            State::Used { uid, .. } => Some((
+                ArenaId::<T> {
+                    uid: *uid,
+                    idx,
+                    _ty: PhantomData,
+                },
+                val,
+            )),
             _ => unreachable!(),
         }
     }
@@ -1238,18 +1258,23 @@ impl<'a, T> Iterator for PairsMut<'a, T> {
 /// Iterator over an arena's IDs.
 ///
 /// This struct is created by the [`ids`](Arena::ids) method on [`Arena`].
-pub struct Ids<'a> {
+pub struct Ids<'a, T> {
     iter: std::iter::Enumerate<std::slice::Iter<'a, Slot>>,
+    _ty: PhantomData<T>,
 }
 
-impl<'a> Iterator for Ids<'a> {
-    type Item = ArenaId;
+impl<'a, T> Iterator for Ids<'a, T> {
+    type Item = ArenaId<T>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (idx, slot) = self.iter.next()?;
         match &slot.state {
-            State::Used { uid, .. } => Some(ArenaId { uid: *uid, idx }),
+            State::Used { uid, .. } => Some(ArenaId::<T> {
+                uid: *uid,
+                idx,
+                _ty: PhantomData,
+            }),
             _ => None,
         }
     }
