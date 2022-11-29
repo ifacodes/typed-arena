@@ -288,6 +288,11 @@ impl<T> Arena<T> {
         self.values.as_mut_ptr()
     }
 
+    #[cfg(feature = "uuid")]
+    pub fn match_id(&self, id: &ArenaId<T>) -> bool {
+        id.uuid == self.uuid
+    }
+
     /// Returns a reference to the value assigned with the ID, or `None` if the
     /// value is not in the arena.
     ///
@@ -312,6 +317,10 @@ impl<T> Arena<T> {
     /// ```
     #[inline]
     pub fn get(&self, id: ArenaId<T>) -> Option<&T> {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&id) {
+            return None;
+        }
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(&self.values[*value]),
             _ => None,
@@ -343,6 +352,10 @@ impl<T> Arena<T> {
     /// ```
     #[inline]
     pub fn get_mut(&mut self, id: ArenaId<T>) -> Option<&mut T> {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&id) {
+            return None;
+        }
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(&mut self.values[*value]),
             _ => None,
@@ -374,6 +387,10 @@ impl<T> Arena<T> {
     ///
     /// ```
     pub fn get2_mut(&mut self, a: ArenaId<T>, b: ArenaId<T>) -> (Option<&mut T>, Option<&mut T>) {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&a) || !self.match_id(&b) {
+            return (None, None);
+        }
         match (self.index_of(a), self.index_of(b)) {
             (Some(a), Some(b)) => {
                 assert_ne!(a, b);
@@ -414,6 +431,10 @@ impl<T> Arena<T> {
     /// ```
     #[inline]
     pub fn contains(&self, id: ArenaId<T>) -> bool {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&id) {
+            return false;
+        }
         self.get(id).is_some()
     }
 
@@ -490,6 +511,10 @@ impl<T> Arena<T> {
     /// ```
     #[inline]
     pub fn index_of(&self, id: ArenaId<T>) -> Option<usize> {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&id) {
+            return None;
+        }
         match &self.slots.get(id.idx)?.state {
             State::Used { uid, value } if *uid == id.uid => Some(*value),
             _ => None,
@@ -606,6 +631,10 @@ impl<T> Arena<T> {
     ///
     /// ```
     pub fn remove(&mut self, id: ArenaId<T>) -> Option<T> {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&id) {
+            return None;
+        }
         // get the position of the removed value
         let removed_val = match &self.slots[id.idx].state {
             State::Used { uid, value } if *uid == id.uid => *value,
@@ -757,6 +786,10 @@ impl<T> Arena<T> {
     /// ```
     #[inline]
     pub fn swap_positions(&mut self, i: ArenaId<T>, j: ArenaId<T>) -> bool {
+        #[cfg(feature = "uuid")]
+        if !self.match_id(&i) || !self.match_id(&j) {
+            return false;
+        }
         if let Some(i) = self.index_of(i) {
             if let Some(j) = self.index_of(j) {
                 self.swap(i, j);
