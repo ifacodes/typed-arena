@@ -104,6 +104,7 @@
 //! should never assume the values or IDs in an arena remain in the order you added them.
 
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use std::ops::{Deref, Index, IndexMut};
 
 /// A contiguous growable container which assigns and returns IDs to values when they are
@@ -1137,20 +1138,53 @@ enum State {
 /// re-ordered.
 ///
 /// They implement `Copy` and so can be passed around freely.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ArenaId {
+#[derive(Debug)]
+pub struct ArenaId<T> {
     uid: u64,
     idx: usize,
+    _ty: PhantomData<fn() -> T>,
 }
 
-impl PartialOrd for ArenaId {
+// This sucks, but the following need to be implemented manually due to [derive] not currently handling PhantomData well.
+// See: https://github.com/rust-lang/rust/issues/26925
+impl<T> Clone for ArenaId<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            uid: self.uid,
+            idx: self.idx,
+            _ty: PhantomData,
+        }
+    }
+}
+
+impl<T> Copy for ArenaId<T> {}
+
+impl<T> PartialEq for ArenaId<T> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid && self.idx == other.idx
+    }
+}
+
+impl<T> Eq for ArenaId<T> {}
+
+impl<T> std::hash::Hash for ArenaId<T> {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uid.hash(state);
+        self.idx.hash(state);
+    }
+}
+
+impl<T> PartialOrd for ArenaId<T> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ArenaId {
+impl<T> Ord for ArenaId<T> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         (self.uid, self.idx).cmp(&(other.uid, other.idx))
