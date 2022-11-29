@@ -106,6 +106,8 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::ops::{Deref, Index, IndexMut};
+#[cfg(feature = "uuid")]
+use uuid::Uuid;
 
 /// A contiguous growable container which assigns and returns IDs to values when they are
 /// added to it.
@@ -115,6 +117,8 @@ pub struct Arena<T> {
     slots: Vec<Slot>,
     next_uid: u64,
     first_free: Option<usize>,
+    #[cfg(feature = "uuid")]
+    uuid: Uuid,
 }
 
 impl<T> Arena<T> {
@@ -127,12 +131,24 @@ impl<T> Arena<T> {
     /// # use arena::Arena;
     /// let mut arena: Arena<String> = Arena::new();
     /// ```
+    #[cfg(not(feature = "uuid"))]
     pub const fn new() -> Self {
         Self {
             values: Vec::new(),
             slots: Vec::new(),
             next_uid: 1,
             first_free: None,
+        }
+    }
+
+    #[cfg(feature = "uuid")]
+    pub fn new() -> Self {
+        Self {
+            values: Vec::new(),
+            slots: Vec::new(),
+            next_uid: 1,
+            first_free: None,
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -152,6 +168,8 @@ impl<T> Arena<T> {
             slots: Vec::with_capacity(capacity),
             next_uid: 1,
             first_free: None,
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -434,6 +452,8 @@ impl<T> Arena<T> {
         let idx = self.slots.get(index)?.value_slot;
         match &self.slots[idx].state {
             State::Used { uid, value } if *value == index => Some(ArenaId::<T> {
+                #[cfg(feature = "uuid")]
+                uuid: self.uuid,
                 uid: *uid,
                 idx,
                 _ty: PhantomData,
@@ -560,6 +580,8 @@ impl<T> Arena<T> {
         };
         self.slots[value].value_slot = idx;
         let id = ArenaId::<T> {
+            #[cfg(feature = "uuid")]
+            uuid: self.uuid,
             uid: self.next_uid,
             idx,
             _ty: PhantomData,
@@ -917,6 +939,8 @@ impl<T> Arena<T> {
         Pairs {
             iter: self.values.iter().enumerate(),
             slots: &self.slots,
+            #[cfg(feature = "uuid")]
+            uuid: self.uuid,
         }
     }
 
@@ -950,6 +974,8 @@ impl<T> Arena<T> {
         PairsMut {
             iter: self.values.iter_mut().enumerate(),
             slots: &self.slots,
+            #[cfg(feature = "uuid")]
+            uuid: self.uuid,
         }
     }
 
@@ -975,6 +1001,8 @@ impl<T> Arena<T> {
         Ids {
             iter: self.slots[..self.len()].iter().enumerate(),
             _ty: PhantomData,
+            #[cfg(feature = "uuid")]
+            uuid: self.uuid,
         }
     }
 }
@@ -1081,6 +1109,8 @@ impl<T> From<Vec<T>> for Arena<T> {
             slots,
             first_free: None,
             next_uid: uid,
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::new_v4(),
         }
     }
 }
@@ -1146,6 +1176,8 @@ enum State {
 /// They implement `Copy` and so can be passed around freely.
 #[derive(Debug)]
 pub struct ArenaId<T> {
+    #[cfg(feature = "uuid")]
+    uuid: Uuid,
     uid: u64,
     idx: usize,
     _ty: PhantomData<fn() -> T>,
@@ -1157,6 +1189,8 @@ impl<T> Clone for ArenaId<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::new_v4(),
             uid: self.uid,
             idx: self.idx,
             _ty: PhantomData,
@@ -1167,6 +1201,13 @@ impl<T> Clone for ArenaId<T> {
 impl<T> Copy for ArenaId<T> {}
 
 impl<T> PartialEq for ArenaId<T> {
+    #[cfg(feature = "uuid")]
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.uuid == other.uuid && self.uid == other.uid && self.idx == other.idx
+    }
+
+    #[cfg(not(feature = "uuid"))]
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.uid == other.uid && self.idx == other.idx
@@ -1178,6 +1219,8 @@ impl<T> Eq for ArenaId<T> {}
 impl<T> std::hash::Hash for ArenaId<T> {
     #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        #[cfg(feature = "uuid")]
+        self.uuid.hash(state);
         self.uid.hash(state);
         self.idx.hash(state);
     }
@@ -1191,6 +1234,12 @@ impl<T> PartialOrd for ArenaId<T> {
 }
 
 impl<T> Ord for ArenaId<T> {
+    #[cfg(feature = "uuid")]
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.uuid, self.uid, self.idx).cmp(&(other.uuid, other.uid, other.idx))
+    }
+    #[cfg(not(feature = "uuid"))]
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         (self.uid, self.idx).cmp(&(other.uid, other.idx))
@@ -1203,6 +1252,8 @@ impl<T> Ord for ArenaId<T> {
 pub struct Pairs<'a, T> {
     iter: std::iter::Enumerate<std::slice::Iter<'a, T>>,
     slots: &'a [Slot],
+    #[cfg(feature = "uuid")]
+    uuid: Uuid,
 }
 
 impl<'a, T> Iterator for Pairs<'a, T> {
@@ -1215,6 +1266,8 @@ impl<'a, T> Iterator for Pairs<'a, T> {
         match &self.slots[idx].state {
             State::Used { uid, .. } => Some((
                 ArenaId::<T> {
+                    #[cfg(feature = "uuid")]
+                    uuid: self.uuid,
                     uid: *uid,
                     idx,
                     _ty: PhantomData,
@@ -1232,6 +1285,8 @@ impl<'a, T> Iterator for Pairs<'a, T> {
 pub struct PairsMut<'a, T> {
     iter: std::iter::Enumerate<std::slice::IterMut<'a, T>>,
     slots: &'a [Slot],
+    #[cfg(feature = "uuid")]
+    uuid: Uuid,
 }
 
 impl<'a, T> Iterator for PairsMut<'a, T> {
@@ -1244,6 +1299,8 @@ impl<'a, T> Iterator for PairsMut<'a, T> {
         match &self.slots[idx].state {
             State::Used { uid, .. } => Some((
                 ArenaId::<T> {
+                    #[cfg(feature = "uuid")]
+                    uuid: self.uuid,
                     uid: *uid,
                     idx,
                     _ty: PhantomData,
@@ -1261,6 +1318,8 @@ impl<'a, T> Iterator for PairsMut<'a, T> {
 pub struct Ids<'a, T> {
     iter: std::iter::Enumerate<std::slice::Iter<'a, Slot>>,
     _ty: PhantomData<T>,
+    #[cfg(feature = "uuid")]
+    uuid: Uuid,
 }
 
 impl<'a, T> Iterator for Ids<'a, T> {
@@ -1271,6 +1330,8 @@ impl<'a, T> Iterator for Ids<'a, T> {
         let (idx, slot) = self.iter.next()?;
         match &slot.state {
             State::Used { uid, .. } => Some(ArenaId::<T> {
+                #[cfg(feature = "uuid")]
+                uuid: self.uuid,
                 uid: *uid,
                 idx,
                 _ty: PhantomData,
