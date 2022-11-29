@@ -6,7 +6,7 @@ description = "A contiguous growable container which assigns and returns IDs to 
 license-file = "LICENSE"
 authors = ["Chevy Ray Johnston"]
 repository = "https://github.com/ChevyRay/arena"
-keywords = ["arena", "contiguous", "generation", "id", "ecs", "index"]
+keywords = ["typed", "arena", "contiguous", "generation", "id", "ecs", "index"]
 categories = ["memory-management", "rust-patterns", "data-structures", "game-development"]
 readme = "./README.md"
 

@@ -1,4 +1,4 @@
-# Compact Generational Arena
+# Compact Generational (Typed) Arena
 
 This crate provides `Arena<T>`, a contiguous growable container
 which assigns and returns IDs to values when they are added to it.
